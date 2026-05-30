@@ -109,6 +109,41 @@ SYSTEM_PROMPT = """Ты — Stella, мастер-астролог с 20-летн
 • Сатурная линия — труд, испытания
 
 ════════════════════════════════════════
+🧮 РАБОТА С РАСЧЁТАМИ
+════════════════════════════════════════
+
+При ответе на любой вопрос связанный с астрологией — ВСЕГДА используй реальные данные:
+
+1. Если вопрос про СЕЙЧАС (транзиты, настроение, день, неделя):
+   → вызови get_planet_positions + get_moon_phase + get_mercury_retrograde
+   → строй ответ на РЕАЛЬНЫХ позициях планет, не по памяти
+
+2. Если вопрос про НАТАЛЬНУЮ КАРТУ:
+   → вызови get_user_profile чтобы взять данные
+   → если карты нет — запроси дату рождения
+
+3. Если вопрос про СОВМЕСТИМОСТЬ:
+   → вызови calculate_compatibility для базового расчёта
+   → затем дай глубокий синастрический анализ
+
+4. Если вопрос про ТАРО:
+   → ВСЕГДА вызывай draw_tarot — никогда не придумывай карты сам
+
+5. Если вопрос про НУМЕРОЛОГИЮ:
+   → вызови calculate_numerology с датой рождения
+
+Примеры вопросов и что делать:
+• «Какой сегодня день для сделок?» → get_planet_positions + get_mercury_retrograde
+• «Почему я сейчас так себя чувствую?» → get_moon_phase + get_planet_positions
+• «Хороший ли сейчас момент начать проект?» → get_planet_positions + get_moon_phase
+• «Вытяни карту» → draw_tarot (one_card)
+• «Мой гороскоп на неделю» → get_planet_positions + get_user_profile
+• «Совместимы ли мы с Тельцом?» → calculate_compatibility
+
+После получения данных через инструменты — ИНТЕРПРЕТИРУЙ их глубоко,
+не просто перечисляй позиции планет, а объясняй что это значит для человека.
+
+════════════════════════════════════════
 ⚠️ ЭТИКА
 ════════════════════════════════════════
 
@@ -333,6 +368,31 @@ async def execute_tool(name: str, input_data: dict) -> str:
         return json.dumps({"error": str(e)})
 
 
+async def _get_astro_context() -> str:
+    """Получить текущий астрологический контекст для системного промпта."""
+    try:
+        from astro_calc import get_moon_phase, get_planet_positions, get_mercury_retrograde
+        moon = get_moon_phase()
+        mercury = get_mercury_retrograde()
+        planets = get_planet_positions()
+
+        planet_str = ", ".join(
+            f"{p} в {info['sign']}° {info['degree']}"
+            for p, info in list(planets.items())[:7]
+            if "sign" in info
+        )
+
+        return (
+            f"\n\n[АСТРОДАННЫЕ СЕЙЧАС — используй в ответах:]"
+            f"\n🌙 Луна: {moon['phase']} в {moon['moon_sign']}, освещение {moon['illumination']}%"
+            f"\n{mercury['status']}"
+            f"\n🪐 Планеты: {planet_str}"
+            f"\nЭнергия дня: {moon['energy']}"
+        )
+    except Exception as e:
+        return f"\n\n[Астроданные временно недоступны: {e}]"
+
+
 async def chat(
     user_id: int,
     message: str,
@@ -344,12 +404,17 @@ async def chat(
     name = user_name or "дорогой искатель"
     now = datetime.now()
 
+    # Загружаем актуальные астроданные
+    astro_context = await _get_astro_context()
+
     system = (
         SYSTEM_PROMPT
         + f"\n\n[КЛИЕНТ: имя={name}, user_id={user_id}]"
         f"\n[СЕЙЧАС: {now.strftime('%d.%m.%Y %H:%M')}, {_get_weekday(now)}]"
-        "\nОбращайся по имени. Используй user_id во всех инструментах."
+        + astro_context
+        + "\n\nОбращайся по имени. Используй user_id во всех инструментах."
         "\nПомни историю разговора — это важно для контекста чтений."
+        "\nВСЕГДА опирайся на реальные астроданные выше при ответах о текущем моменте."
     )
 
     if image_base64:
