@@ -2,11 +2,20 @@
 Астрологические вычисления — планеты, луна, знаки.
 Использует библиотеку ephem для точных астрономических данных.
 """
-import ephem
 import math
 from datetime import datetime, date
 from typing import Optional
-import pytz
+
+try:
+    import ephem
+    EPHEM_AVAILABLE = True
+except ImportError:
+    EPHEM_AVAILABLE = False
+
+try:
+    import pytz
+except ImportError:
+    pass
 
 
 # ─── Знаки зодиака ───
@@ -70,6 +79,9 @@ def get_moon_sign_from_ephem(birth_datetime: datetime) -> str:
 
 def get_planet_positions(dt: datetime = None) -> dict:
     """Получить позиции планет на заданную дату."""
+    if not EPHEM_AVAILABLE:
+        return {"error": "ephem not available", "Солнце": {"sign": "неизвестно", "degree": 0}}
+
     if dt is None:
         dt = datetime.utcnow()
 
@@ -110,6 +122,13 @@ def get_planet_positions(dt: datetime = None) -> dict:
 
 def get_moon_phase(dt: datetime = None) -> dict:
     """Получить фазу Луны."""
+    if not EPHEM_AVAILABLE:
+        return {
+            "phase": "🌙 Луна", "illumination": 50, "description": "данные недоступны",
+            "energy": "неизвестно", "moon_sign": "неизвестно", "moon_sign_symbol": "🌙",
+            "angle": 0, "next_new_moon": "скоро", "next_full_moon": "скоро"
+        }
+
     if dt is None:
         dt = datetime.utcnow()
 
