@@ -31,52 +31,62 @@ dp = Dispatcher(storage=MemoryStorage())
 # ─── Helpers ───
 
 async def agent_reply(message: Message, text: str, image_b64: str = None):
-    await bot.send_chat_action(message.chat.id, "typing")
-    user = await db.get_user(message.from_user.id)
-    name = (user or {}).get("first_name") or message.from_user.first_name or "искатель"
-    history = await db.get_chat_history(message.from_user.id)
+    try:
+        await bot.send_chat_action(message.chat.id, "typing")
+        user = await db.get_user(message.from_user.id)
+        name = (user or {}).get("first_name") or message.from_user.first_name or "искатель"
+        history = await db.get_chat_history(message.from_user.id)
 
-    response = await chat(
-        user_id=message.from_user.id,
-        message=text,
-        history=history,
-        user_name=name,
-        image_base64=image_b64,
-    )
-    await db.save_message(message.from_user.id, "user", text[:500])
-    await db.save_message(message.from_user.id, "assistant", response[:1000])
+        response = await chat(
+            user_id=message.from_user.id,
+            message=text,
+            history=history,
+            user_name=name,
+            image_base64=image_b64,
+        )
+        await db.save_message(message.from_user.id, "user", text[:500])
+        await db.save_message(message.from_user.id, "assistant", response[:1000])
 
-    # Разбиваем длинные сообщения
-    if len(response) > 4000:
-        parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
-        for part in parts:
-            await message.answer(part, parse_mode="Markdown")
-    else:
-        await message.answer(response, parse_mode="Markdown")
+        if len(response) > 4000:
+            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            for part in parts:
+                await message.answer(part, parse_mode="Markdown")
+        else:
+            await message.answer(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"agent_reply error: {e}", exc_info=True)
+        await message.answer(f"🔮 Произошла ошибка: {str(e)[:200]}\n\nПопробуй ещё раз.")
 
 
 async def do_agent_reply(chat_id: int, user_id: int, text: str, reply_func, image_b64: str = None):
-    await bot.send_chat_action(chat_id, "typing")
-    user = await db.get_user(user_id)
-    name = (user or {}).get("first_name") or "искатель"
-    history = await db.get_chat_history(user_id)
+    try:
+        await bot.send_chat_action(chat_id, "typing")
+        user = await db.get_user(user_id)
+        name = (user or {}).get("first_name") or "искатель"
+        history = await db.get_chat_history(user_id)
 
-    response = await chat(
-        user_id=user_id,
-        message=text,
-        history=history,
-        user_name=name,
-        image_base64=image_b64,
-    )
-    await db.save_message(user_id, "user", text[:500])
-    await db.save_message(user_id, "assistant", response[:1000])
+        response = await chat(
+            user_id=user_id,
+            message=text,
+            history=history,
+            user_name=name,
+            image_base64=image_b64,
+        )
+        await db.save_message(user_id, "user", text[:500])
+        await db.save_message(user_id, "assistant", response[:1000])
 
-    if len(response) > 4000:
-        parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
-        for part in parts:
-            await reply_func(part, parse_mode="Markdown")
-    else:
-        await reply_func(response, parse_mode="Markdown")
+        if len(response) > 4000:
+            parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+            for part in parts:
+                await reply_func(part, parse_mode="Markdown")
+        else:
+            await reply_func(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"do_agent_reply error: {e}", exc_info=True)
+        try:
+            await reply_func(f"🔮 Произошла ошибка: {str(e)[:200]}\n\nПопробуй ещё раз.")
+        except Exception:
+            pass
 
 
 def main_keyboard() -> InlineKeyboardMarkup:
